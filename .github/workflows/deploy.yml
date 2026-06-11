@@ -1,0 +1,52 @@
+name: deploy
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["release"]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SERVER_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.SERVER_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Deploy Compose stack
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_DEPLOY_PATH: ${{ secrets.SERVER_DEPLOY_PATH }}
+        run: |
+          if [ -z "$SERVER_DEPLOY_PATH" ]; then
+            SERVER_DEPLOY_PATH=/opt/emuready-discord-giveaway
+          fi
+          ssh -i ~/.ssh/deploy_key "$SERVER_USER@$SERVER_HOST" \
+            "cd '$SERVER_DEPLOY_PATH' && docker compose -f docker-compose.prod.yml pull api && docker compose -f docker-compose.prod.yml up -d --remove-orphans && docker image prune -f"
+
+      - name: Readiness check
+        env:
+          HEALTH_URL: ${{ vars.HEALTH_URL }}
+        run: |
+          if [ -z "$HEALTH_URL" ]; then
+            echo "HEALTH_URL repository/environment variable is required"
+            exit 1
+          fi
+          for i in $(seq 1 20); do
+            if curl -fsS "$HEALTH_URL/ready" >/dev/null; then
+              echo "readiness check ok"
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1

@@ -1,0 +1,15 @@
+.git
+.dockerignore
+.gitignore
+.env
+.env.*
+README.md
+*.md
+*.log
+**/tmp
+**/*.tmp
+**/.DS_Store
+vendor
+/api
+/discord-commands
+coverage.out

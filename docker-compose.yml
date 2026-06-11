@@ -1,0 +1,43 @@
+name: emuready-discord-giveaway
+
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://giveaway:giveaway@db:5432/giveaway?sslmode=disable
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-dev-discord-token}
+      DISCORD_PUBLIC_KEY: ${DISCORD_PUBLIC_KEY:-0000000000000000000000000000000000000000000000000000000000000000}
+      DISCORD_APPLICATION_ID: ${DISCORD_APPLICATION_ID:-123456789012345678}
+      GUILD_ID: ${GUILD_ID:-123456789012345678}
+      GIVEAWAY_ROLE_ID: ${GIVEAWAY_ROLE_ID:-123456789012345679}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-dev-github-client-id}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-dev-github-client-secret}
+      GITHUB_REPO: ${GITHUB_REPO:-owner/repo}
+      GITHUB_OAUTH_SCOPE: ${GITHUB_OAUTH_SCOPE:-}
+      BASE_URL: ${BASE_URL:-http://localhost:8080}
+      SIGNING_SECRET: ${SIGNING_SECRET:-dev-signing-secret-at-least-32-chars}
+      STATE_TTL_SECONDS: "600"
+      MIGRATIONS_DIR: /app/migrations
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: giveaway
+      POSTGRES_USER: giveaway
+      POSTGRES_PASSWORD: giveaway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U giveaway -d giveaway"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:
