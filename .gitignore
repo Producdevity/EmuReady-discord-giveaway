@@ -1,0 +1,31 @@
+# Local environment
+.env
+.env.*
+!.env.example
+
+# Go build output
+/api
+/discord-commands
+*.exe
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Go workspace and vendoring
+go.work
+go.work.sum
+/vendor/
+
+# Logs and temporary files
+*.log
+tmp/
+temp/
+*.tmp
+
+# OS/editor files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
