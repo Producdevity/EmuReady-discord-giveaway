@@ -95,6 +95,8 @@ func main() {
 	app.Get("/ready", handlers.NewReadyHandler(db))
 	app.Get("/privacy", handlers.NewPrivacyHandler())
 	app.Get("/privacy-policy", handlers.NewPrivacyHandler())
+	app.Get("/terms", handlers.NewTermsHandler())
+	app.Get("/terms-of-service", handlers.NewTermsHandler())
 	app.Get("/callback", handlers.NewCallbackHandler(cfg, callbackSvc, logger))
 	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, discordClient, winnerQueue, logger).Handle)
 
