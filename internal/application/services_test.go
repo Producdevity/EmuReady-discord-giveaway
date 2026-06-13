@@ -57,7 +57,7 @@ func TestWinnerEditsOriginalInteractionWithWebhookPayload(t *testing.T) {
 			{DiscordID: 2, GithubID: 22, GithubLogin: "bob"},
 		},
 	}
-	discord := &fakeWinnerDiscord{members: []string{"1", "2"}}
+	discord := &fakeWinnerDiscord{}
 	github := &fakeWinnerGitHub{starred: map[string]bool{"alice": true, "bob": false}}
 
 	service, err := NewWinnerService(testConfig(), store, discord, github, zerolog.Nop())
@@ -70,6 +70,9 @@ func TestWinnerEditsOriginalInteractionWithWebhookPayload(t *testing.T) {
 
 	if len(discord.removedUsers) != 1 || discord.removedUsers[0] != "2" {
 		t.Fatalf("expected bob role removal, got %v", discord.removedUsers)
+	}
+	if len(store.deletes) != 1 || store.deletes[0].DiscordID != 2 || store.deletes[0].GithubID != 22 {
+		t.Fatalf("expected bob entry deletion, got %v", store.deletes)
 	}
 	if len(discord.edits) != 1 {
 		t.Fatalf("expected one edit, got %d", len(discord.edits))
@@ -119,11 +122,11 @@ func (s *fakeEntrantStore) DeleteEntrant(_ context.Context, discordID int64, git
 	return nil
 }
 
-func (s *fakeEntrantStore) AllEntrants(context.Context) ([]domain.Entrant, error) {
-	return s.entrants, nil
+func (s *fakeEntrantStore) CountEntrants(context.Context) (int, error) {
+	return len(s.entrants), nil
 }
 
-func (s *fakeEntrantStore) FilterEntrantsByDiscordIDs(context.Context, []int64) ([]domain.Entrant, error) {
+func (s *fakeEntrantStore) AllEntrants(context.Context) ([]domain.Entrant, error) {
 	return s.entrants, nil
 }
 
@@ -153,13 +156,8 @@ func (g *fakeCallbackGitHub) HasStarredRepo(context.Context, string, string, str
 }
 
 type fakeWinnerDiscord struct {
-	members      []string
 	removedUsers []string
 	edits        []interface{}
-}
-
-func (d *fakeWinnerDiscord) GetMembersByRole(context.Context, string, string) ([]string, error) {
-	return d.members, nil
 }
 
 func (d *fakeWinnerDiscord) RemoveRoleFromMember(_ context.Context, _ string, userID string, _ string) error {

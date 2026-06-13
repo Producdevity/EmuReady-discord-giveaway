@@ -66,6 +66,12 @@ func (r *EntrantRepository) DeleteEntrant(ctx context.Context, discordID int64, 
 	return err
 }
 
+func (r *EntrantRepository) CountEntrants(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM entries`).Scan(&count)
+	return count, err
+}
+
 func (r *EntrantRepository) AllEntrants(ctx context.Context) ([]domain.Entrant, error) {
 	rows, err := r.pool.Query(ctx, `
 	SELECT discord_id, github_id, github_login, created_at
@@ -95,31 +101,4 @@ func isUniqueViolation(err error) bool {
 	}
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
-}
-
-func (r *EntrantRepository) FilterEntrantsByDiscordIDs(ctx context.Context, ids []int64) ([]domain.Entrant, error) {
-	if len(ids) == 0 {
-		return []domain.Entrant{}, nil
-	}
-	rows, err := r.pool.Query(ctx, `
-	SELECT discord_id, github_id, github_login, created_at
-	FROM entries
-	WHERE discord_id = ANY($1::bigint[])`, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	entries := make([]domain.Entrant, 0)
-	for rows.Next() {
-		var entrant domain.Entrant
-		if err := rows.Scan(&entrant.DiscordID, &entrant.GithubID, &entrant.GithubLogin, &entrant.CreatedAt); err != nil {
-			return nil, err
-		}
-		entries = append(entries, entrant)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return entries, nil
 }

@@ -15,7 +15,6 @@ import (
 )
 
 type winnerDiscordClient interface {
-	GetMembersByRole(ctx context.Context, guildID string, roleID string) ([]string, error)
 	RemoveRoleFromMember(ctx context.Context, guildID, userID, roleID string) error
 	EditOriginalInteractionResponse(ctx context.Context, applicationID string, interactionToken string, body interface{}) error
 }
@@ -56,39 +55,28 @@ func (s *WinnerService) Run(ctx context.Context, interaction domain.Interaction,
 		winnerCount = s.cfg.WinnerMax
 	}
 
-	roleMembers, err := s.discord.GetMembersByRole(ctx, s.cfg.GuildID, s.cfg.GiveawayRoleID)
-	if err != nil {
-		return err
-	}
-	memberSet := make(map[string]struct{}, len(roleMembers))
-	for _, memberID := range roleMembers {
-		memberSet[memberID] = struct{}{}
-	}
-
 	entrants, err := s.repo.AllEntrants(ctx)
 	if err != nil {
 		return err
 	}
-	candidates := make([]domain.Entrant, 0)
+	candidates := make([]domain.Entrant, 0, len(entrants))
 	candidateLogins := make([]string, 0, len(entrants))
 	seenLogins := make(map[string]struct{}, len(entrants))
 	for _, entrant := range entrants {
-		if _, ok := memberSet[fmt.Sprintf("%d", entrant.DiscordID)]; ok {
-			login := strings.ToLower(strings.TrimSpace(entrant.GithubLogin))
-			if login == "" {
-				continue
-			}
-			candidates = append(candidates, entrant)
-			if _, seen := seenLogins[login]; seen {
-				continue
-			}
-			seenLogins[login] = struct{}{}
-			candidateLogins = append(candidateLogins, login)
+		login := strings.ToLower(strings.TrimSpace(entrant.GithubLogin))
+		if login == "" {
+			continue
 		}
+		candidates = append(candidates, entrant)
+		if _, seen := seenLogins[login]; seen {
+			continue
+		}
+		seenLogins[login] = struct{}{}
+		candidateLogins = append(candidateLogins, login)
 	}
 
 	if len(candidates) == 0 {
-		return s.respond(ctx, interaction.Token, "No entrants currently in giveaway role.")
+		return s.respond(ctx, interaction.Token, "No entrants currently registered.")
 	}
 
 	starred, completed, err := s.github.CheckUsersStar(ctx, candidateLogins, s.owner, s.repoName, s.cfg.WinnerConcurrency)
@@ -111,6 +99,9 @@ func (s *WinnerService) Run(ctx context.Context, interaction domain.Interaction,
 		}
 		if err := s.discord.RemoveRoleFromMember(ctx, s.cfg.GuildID, fmt.Sprintf("%d", entrant.DiscordID), s.cfg.GiveawayRoleID); err != nil {
 			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("remove role failed")
+		}
+		if err := s.repo.DeleteEntrant(ctx, entrant.DiscordID, entrant.GithubID); err != nil {
+			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("delete stale entrant failed")
 		}
 		removed++
 	}

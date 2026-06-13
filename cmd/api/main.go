@@ -98,7 +98,7 @@ func main() {
 	app.Get("/terms", handlers.NewTermsHandler())
 	app.Get("/terms-of-service", handlers.NewTermsHandler())
 	app.Get("/callback", handlers.NewCallbackHandler(cfg, callbackSvc, logger))
-	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, discordClient, winnerQueue, logger).Handle)
+	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, store, discordClient, winnerQueue, logger).Handle)
 
 	go func() {
 		if err := app.Listen(":" + cfg.Port); err != nil && err.Error() != "closed" {

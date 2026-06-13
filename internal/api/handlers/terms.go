@@ -134,8 +134,9 @@ const termsOfServiceHTML = `<!doctype html>
       <h2>2. Description of Service</h2>
       <p>
         The EmuReady Discord Giveaway bot helps run giveaways in the EmuReady Discord server. The
-        bot can verify that a participant has starred the configured GitHub repository, assign a
-        giveaway role, count entrants, and help staff draw winners from current eligible entrants.
+        bot can verify that a participant has starred the configured GitHub repository, store the
+        giveaway entry, assign a giveaway role, count stored entrants, and help staff draw winners
+        from stored eligible entries.
       </p>
       <p>
         The bot is provided for EmuReady community giveaways. It is not a general-purpose
@@ -179,9 +180,9 @@ const termsOfServiceHTML = `<!doctype html>
     <section>
       <h2>5. Winner Selection</h2>
       <p>
-        Winners are selected from the current eligible entrant pool available to the bot at the time
+        Winners are selected from the stored eligible entrant pool available to the bot at the time
         staff run the winner command. Before or during winner selection, the bot or staff may
-        re-check eligibility, including GitHub star status and Discord role membership.
+        re-check eligibility, including GitHub star status and applicable giveaway rules.
       </p>
       <p>
         A selected winner may be disqualified and replaced if they no longer meet giveaway rules,

@@ -19,12 +19,16 @@ import (
 
 type interactionDiscordClient interface {
 	VerifySignature(timestamp, signature string, body []byte, publicKey string) error
-	GetMembersByRole(ctx context.Context, guildID string, roleID string) ([]string, error)
+}
+
+type entrantCounter interface {
+	CountEntrants(ctx context.Context) (int, error)
 }
 
 type InteractionHandler struct {
 	cfg           *config.Config
 	enterSvc      *application.EnterService
+	entrants      entrantCounter
 	discordClient interactionDiscordClient
 	winnerQueue   *worker.WinnerQueue
 	logger        zerolog.Logger
@@ -33,6 +37,7 @@ type InteractionHandler struct {
 func NewInteractionHandler(
 	cfg *config.Config,
 	enterSvc *application.EnterService,
+	entrants entrantCounter,
 	discordClient interactionDiscordClient,
 	winnerQueue *worker.WinnerQueue,
 	logger zerolog.Logger,
@@ -40,6 +45,7 @@ func NewInteractionHandler(
 	return &InteractionHandler{
 		cfg:           cfg,
 		enterSvc:      enterSvc,
+		entrants:      entrants,
 		discordClient: discordClient,
 		winnerQueue:   winnerQueue,
 		logger:        logger,
@@ -116,12 +122,12 @@ func (h *InteractionHandler) handleCommand(c *fiber.Ctx, interaction domain.Inte
 		}
 		return c.JSON(resp)
 	case "entrants":
-		members, err := h.discordClient.GetMembersByRole(c.Context(), h.cfg.GuildID, h.cfg.GiveawayRoleID)
+		count, err := h.entrants.CountEntrants(c.Context())
 		if err != nil {
-			h.logger.Error().Err(err).Str("request_id", requestID).Msg("list entrants failed")
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to fetch entrants"})
+			h.logger.Error().Err(err).Str("request_id", requestID).Msg("count entrants failed")
+			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "failed to count entrants"})
 		}
-		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: fmt.Sprintf("Current entrants: %d", len(members)), Flags: domain.MessageFlagEphemeral}})
+		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: fmt.Sprintf("Current entrants: %d", count), Flags: domain.MessageFlagEphemeral}})
 	case "winner":
 		if !hasManageGuild(interaction) {
 			return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "You need Manage Server permission to use /winner.", Flags: domain.MessageFlagEphemeral}})

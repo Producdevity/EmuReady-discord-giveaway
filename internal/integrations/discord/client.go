@@ -69,13 +69,6 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, payload
 	}, c.logger, c.retryPolicy)
 }
 
-type discordMember struct {
-	User struct {
-		ID string `json:"id"`
-	} `json:"user"`
-	Roles []string `json:"roles"`
-}
-
 type applicationInfo struct {
 	ID string `json:"id"`
 }
@@ -103,42 +96,6 @@ func (c *Client) VerifySignature(timestamp, signature string, body []byte, publi
 		return fmt.Errorf("signature verification failed")
 	}
 	return nil
-}
-
-func (c *Client) GetMembersByRole(ctx context.Context, guildID string, roleID string) ([]string, error) {
-	if strings.TrimSpace(guildID) == "" || strings.TrimSpace(roleID) == "" {
-		return nil, fmt.Errorf("missing guildID or roleID")
-	}
-	memberIDs := make([]string, 0)
-	after := ""
-	for {
-		url := fmt.Sprintf("%s/guilds/%s/members?limit=%d", discordAPIPrefix, guildID, 1000)
-		if after != "" {
-			url += "&after=" + after
-		}
-		var members []discordMember
-		if err := c.request(ctx, http.MethodGet, url, nil, &members); err != nil {
-			return nil, err
-		}
-		for _, member := range members {
-			if member.User.ID == "" {
-				continue
-			}
-			for _, role := range member.Roles {
-				if role == roleID {
-					memberIDs = append(memberIDs, member.User.ID)
-					break
-				}
-			}
-		}
-		if len(members) < 1000 {
-			break
-		}
-		if len(members) > 0 {
-			after = members[len(members)-1].User.ID
-		}
-	}
-	return memberIDs, nil
 }
 
 func (c *Client) AddRoleToMember(ctx context.Context, guildID, userID, roleID string) error {

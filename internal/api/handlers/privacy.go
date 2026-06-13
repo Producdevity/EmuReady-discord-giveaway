@@ -149,7 +149,7 @@ const privacyPolicyHTML = `<!doctype html>
       <h3>2.1 Information from Discord</h3>
       <ul>
         <li><strong>Discord user ID:</strong> Used to identify the Discord account entering the giveaway.</li>
-        <li><strong>Discord server and role data:</strong> Used to assign the giveaway role, count entrants, and draw winners.</li>
+        <li><strong>Discord server and role data:</strong> Used to assign or remove the configured giveaway role for known entrants.</li>
         <li><strong>Slash command interaction data:</strong> Used only to respond to giveaway commands such as <code>/enter-giveaway</code>, <code>/entrants</code>, and <code>/winner</code>.</li>
       </ul>
 
@@ -178,7 +178,7 @@ const privacyPolicyHTML = `<!doctype html>
         <li>Verify giveaway eligibility through GitHub star status.</li>
         <li>Prevent the same GitHub account from entering through multiple Discord accounts.</li>
         <li>Assign and remove the configured giveaway role in Discord.</li>
-        <li>Count giveaway entrants and draw winners.</li>
+        <li>Count giveaway entrants and draw winners from stored giveaway entries.</li>
         <li>Re-check eligibility before a winner is selected.</li>
         <li>Operate, secure, debug, and improve the giveaway service.</li>
       </ul>
