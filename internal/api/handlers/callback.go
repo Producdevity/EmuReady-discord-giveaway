@@ -31,8 +31,8 @@ func NewCallbackHandlerFromDeps(
 	if err != nil {
 		logger.Error().Err(err).Msg("callback service bootstrap failed")
 		return func(c *fiber.Ctx) error {
-			repoName, repoURL := callbackRepo(cfg)
-			return c.Status(fiber.StatusInternalServerError).Type("html").SendString(failureHTML("Server misconfigured, please contact support.", repoName, repoURL))
+			failure := callbackFailure{Message: "Server misconfigured, please contact staff."}
+			return c.Status(fiber.StatusInternalServerError).Type("html").SendString(failureHTML(failure, "", ""))
 		}
 	}
 	return NewCallbackHandler(cfg, service, logger)
@@ -48,7 +48,11 @@ func NewCallbackHandler(
 		code := strings.TrimSpace(c.Query("code"))
 		state := strings.TrimSpace(c.Query("state"))
 		if code == "" || state == "" {
-			return c.Status(fiber.StatusBadRequest).Type("html").SendString(failureHTML("Missing authorization code or state.", repoName, repoURL))
+			failure := callbackFailure{
+				Message:  "This authorization link is incomplete.",
+				NextStep: "Return to Discord and run /enter-giveaway again.",
+			}
+			return c.Status(fiber.StatusBadRequest).Type("html").SendString(failureHTML(failure, repoName, repoURL))
 		}
 		user, err := service.Handle(c.Context(), code, state)
 		if err != nil {
@@ -63,47 +67,87 @@ func NewCallbackHandler(
 	}
 }
 
-func lookupCallbackFailure(err error, repoName string) string {
+type callbackFailure struct {
+	Message      string
+	NextStep     string
+	ShowRepoLink bool
+}
+
+func lookupCallbackFailure(err error, repoName string) callbackFailure {
 	if err == nil {
-		return "Could not complete OAuth flow."
+		return callbackFailure{Message: "Could not complete OAuth flow."}
 	}
-	var userMessage string
 	switch {
 	case strings.Contains(strings.ToLower(err.Error()), "expired"):
-		userMessage = "Authorization link expired. Return to Discord and run /enter-giveaway again."
+		return callbackFailure{
+			Message:  "Authorization link expired.",
+			NextStep: "Return to Discord and run /enter-giveaway again.",
+		}
 	case strings.Contains(strings.ToLower(err.Error()), "state"):
-		userMessage = "Authorization link is invalid or has expired. Return to Discord and run /enter-giveaway again."
+		return callbackFailure{
+			Message:  "Authorization link is invalid or has expired.",
+			NextStep: "Return to Discord and run /enter-giveaway again.",
+		}
 	case strings.Contains(strings.ToLower(err.Error()), "does not star"):
 		if repoName != "" {
-			userMessage = "Your GitHub account must star " + repoName + " before you can enter."
-		} else {
-			userMessage = "Your GitHub account must star the configured repository before you can enter."
+			return callbackFailure{
+				Message:      "Your GitHub account must star " + repoName + " before you can enter.",
+				NextStep:     "After starring the repository, return to Discord and run /enter-giveaway again.",
+				ShowRepoLink: true,
+			}
+		}
+		return callbackFailure{
+			Message:  "Your GitHub account must star the configured repository before you can enter.",
+			NextStep: "After starring the repository, return to Discord and run /enter-giveaway again.",
 		}
 	case errors.Is(err, domain.ErrGitHubAlreadyLinked):
-		userMessage = "This GitHub account is already linked to another Discord account."
+		return callbackFailure{
+			Message:  "This GitHub account is already linked to another Discord account.",
+			NextStep: "Contact staff if you think this is wrong.",
+		}
+	case strings.Contains(strings.ToLower(err.Error()), "missing permissions"):
+		return callbackFailure{
+			Message:  "Your GitHub account was verified, but Discord would not let the bot assign the giveaway role.",
+			NextStep: "Please contact staff.",
+		}
+	case strings.Contains(strings.ToLower(err.Error()), "missing access"):
+		return callbackFailure{
+			Message:  "Your GitHub account was verified, but the bot cannot access this Discord server.",
+			NextStep: "Please contact staff.",
+		}
 	case strings.Contains(strings.ToLower(err.Error()), "exchange"):
-		userMessage = "Unable to exchange authorization token with GitHub right now."
+		return callbackFailure{
+			Message:  "Unable to exchange authorization token with GitHub right now.",
+			NextStep: "Return to Discord and run /enter-giveaway again later.",
+		}
 	default:
-		userMessage = "Unable to complete authorization. Please try again later."
+		return callbackFailure{
+			Message:  "Unable to complete authorization.",
+			NextStep: "Please try again later.",
+		}
 	}
-	return userMessage
 }
 
+// TODO: move this to a template file and make pretty
 func successHTML(login string) string {
-	return pageHTML("Success", fmt.Sprintf("Thanks %s. Giveaway access granted.", login), "", "")
+	return pageHTML("Success", fmt.Sprintf("Thanks %s. Giveaway access granted.", login), "", "", "", false)
 }
 
-func failureHTML(message string, repoName string, repoURL string) string {
-	return pageHTML("Callback failed", message, repoName, repoURL)
+// TODO: move this to a template file and make pretty
+func failureHTML(failure callbackFailure, repoName string, repoURL string) string {
+	return pageHTML("Callback failed", failure.Message, failure.NextStep, repoName, repoURL, failure.ShowRepoLink)
 }
 
-func pageHTML(title string, message string, repoName string, repoURL string) string {
+// TODO: move this to a template file and make pretty
+func pageHTML(title string, message string, nextStep string, repoName string, repoURL string, showRepoLink bool) string {
 	escapedTitle := html.EscapeString(title)
 	escapedMessage := html.EscapeString(message)
 	body := "<p>" + escapedMessage + "</p>"
-	if title == "Callback failed" && repoName != "" && repoURL != "" {
+	if showRepoLink && repoName != "" && repoURL != "" {
 		body += `<p><a class="button" href="` + html.EscapeString(repoURL) + `">Open ` + html.EscapeString(repoName) + `</a></p>`
-		body += "<p>After starring the repository, return to Discord and run <code>/enter-giveaway</code> again.</p>"
+	}
+	if nextStep != "" {
+		body += "<p>" + html.EscapeString(nextStep) + "</p>"
 	}
 	if title == "Success" {
 		body += "<p>You can return to Discord.</p>"
