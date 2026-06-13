@@ -108,7 +108,7 @@ func (h *InteractionHandler) handleCommand(c *fiber.Ctx, interaction domain.Inte
 	}
 
 	switch interaction.Data.Name {
-	case "enter":
+	case "enter", "enter-giveaway":
 		resp, err := h.enterSvc.BuildResponse(discordID)
 		if err != nil {
 			h.logger.Error().Err(err).Str("request_id", requestID).Msg("enter response failed")

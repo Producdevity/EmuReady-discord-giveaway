@@ -40,7 +40,12 @@ func main() {
 	commands := []map[string]any{
 		{
 			"name":        "enter",
-			"description": "Enter giveaway",
+			"description": "Enter the giveaway",
+			"type":        1,
+		},
+		{
+			"name":        "enter-giveaway",
+			"description": "Enter the giveaway",
 			"type":        1,
 		},
 		{

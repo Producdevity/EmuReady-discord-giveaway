@@ -22,6 +22,10 @@ func (s *EnterService) BuildResponse(discordID int64) (domain.InteractionRespons
 	if err != nil {
 		return domain.InteractionResponse{}, err
 	}
+	owner, repo, err := s.cfg.GitHubRepoParts()
+	if err != nil {
+		return domain.InteractionResponse{}, err
+	}
 
 	callbackURL := strings.TrimRight(s.cfg.BaseURL, "/") + "/callback"
 	values := url.Values{
@@ -33,16 +37,25 @@ func (s *EnterService) BuildResponse(discordID int64) (domain.InteractionRespons
 		values.Set("scope", scope)
 	}
 	authURL := "https://github.com/login/oauth/authorize?" + values.Encode()
+	repoName := owner + "/" + repo
+	repoURL := "https://github.com/" + repoName
 
 	return domain.InteractionResponse{
 		Type: domain.InteractionResponseChannelMessage,
 		Data: &domain.InteractionMessageData{
-			Content: "Connect GitHub to join the giveaway.",
+			Content: "Star " + repoName + ", then authenticate with GitHub to enter the giveaway.",
 			Flags:   domain.MessageFlagEphemeral,
 			Components: []any{
 				map[string]any{
 					"type": 1,
 					"components": []any{
+						map[string]any{
+							"type":     2,
+							"style":    5,
+							"label":    "Open GitHub repo",
+							"url":      repoURL,
+							"disabled": false,
+						},
 						map[string]any{
 							"type":     2,
 							"style":    5,
