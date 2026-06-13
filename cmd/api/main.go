@@ -93,6 +93,8 @@ func main() {
 
 	app.Get("/health", handlers.NewHealthHandler())
 	app.Get("/ready", handlers.NewReadyHandler(db))
+	app.Get("/privacy", handlers.NewPrivacyHandler())
+	app.Get("/privacy-policy", handlers.NewPrivacyHandler())
 	app.Get("/callback", handlers.NewCallbackHandler(cfg, callbackSvc, logger))
 	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, discordClient, winnerQueue, logger).Handle)
 
