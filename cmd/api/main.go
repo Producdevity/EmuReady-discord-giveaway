@@ -75,6 +75,7 @@ func main() {
 	if err != nil {
 		logger.Fatal().Err(err).Msg("winner service failed")
 	}
+	resetSvc := application.NewResetService(cfg, store, discordClient, logger)
 
 	winnerQueue := worker.NewWinnerQueue(ctx, cfg.WinnerWorkerCount, func(c context.Context, t worker.WinnerTask) error {
 		return winnerSvc.Run(c, t.Interaction, t.Count)
@@ -98,7 +99,7 @@ func main() {
 	app.Get("/terms", handlers.NewTermsHandler())
 	app.Get("/terms-of-service", handlers.NewTermsHandler())
 	app.Get("/callback", handlers.NewCallbackHandler(cfg, callbackSvc, logger))
-	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, store, discordClient, winnerQueue, logger).Handle)
+	app.Post("/interactions", handlers.NewInteractionHandler(cfg, enterSvc, resetSvc, store, discordClient, winnerQueue, logger).Handle)
 
 	go func() {
 		if err := app.Listen(":" + cfg.Port); err != nil && err.Error() != "closed" {

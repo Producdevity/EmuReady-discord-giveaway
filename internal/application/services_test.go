@@ -89,6 +89,38 @@ func TestWinnerEditsOriginalInteractionWithWebhookPayload(t *testing.T) {
 	}
 }
 
+func TestResetServiceRemovesRolesAndDeletesEntrants(t *testing.T) {
+	store := &fakeEntrantStore{
+		entrants: []domain.Entrant{
+			{DiscordID: 1, GithubID: 11, GithubLogin: "alice"},
+			{DiscordID: 2, GithubID: 22, GithubLogin: "bob"},
+		},
+	}
+	discord := &fakeWinnerDiscord{}
+	service := NewResetService(testConfig(), store, discord, zerolog.Nop())
+
+	if err := service.Run(context.Background(), domain.Interaction{Token: "interaction-token"}); err != nil {
+		t.Fatalf("run reset service: %v", err)
+	}
+
+	if len(discord.removedUsers) != 2 {
+		t.Fatalf("expected two role removals, got %v", discord.removedUsers)
+	}
+	if len(store.deletes) != 2 {
+		t.Fatalf("expected two deleted entries, got %v", store.deletes)
+	}
+	if len(discord.edits) != 1 {
+		t.Fatalf("expected one edit, got %d", len(discord.edits))
+	}
+	payload, ok := discord.edits[0].(domain.WebhookMessageEdit)
+	if !ok {
+		t.Fatalf("expected webhook message edit payload, got %T", discord.edits[0])
+	}
+	if !strings.Contains(payload.Content, "Giveaway reset complete") {
+		t.Fatalf("reset content mismatch: %q", payload.Content)
+	}
+}
+
 func testConfig() *config.Config {
 	return &config.Config{
 		DiscordApplicationID: "app-id",

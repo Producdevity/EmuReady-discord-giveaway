@@ -50,25 +50,26 @@ func TestExchangeCodeRequestsJSONAndFormEncodesPayload(t *testing.T) {
 	}
 }
 
-func TestCheckUsersStarUsesPerUserStarEndpoint(t *testing.T) {
+func TestCheckUsersStarUsesRepoStargazersEndpoint(t *testing.T) {
 	var mu sync.Mutex
-	requests := make([]string, 0, 2)
+	requests := make([]string, 0, 1)
 	httpClient := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		mu.Lock()
-		requests = append(requests, r.URL.Path)
+		requests = append(requests, r.URL.RequestURI())
 		mu.Unlock()
 		if got := r.Header.Get("Authorization"); got != "Bearer api-token" {
 			t.Fatalf("authorization mismatch: %q", got)
 		}
-		switch r.URL.Path {
-		case "/users/alice/starred/owner/repo":
-			return jsonResponse(http.StatusNoContent, ""), nil
-		case "/users/bob/starred/owner/repo":
-			return jsonResponse(http.StatusNotFound, ""), nil
-		default:
+		if r.URL.Path != "/repos/owner/repo/stargazers" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		return jsonResponse(http.StatusInternalServerError, ""), nil
+		if got := r.URL.Query().Get("per_page"); got != "100" {
+			t.Fatalf("per_page mismatch: %q", got)
+		}
+		if got := r.URL.Query().Get("page"); got != "1" {
+			t.Fatalf("page mismatch: %q", got)
+		}
+		return jsonResponse(http.StatusOK, `[{"login":"Alice"}]`), nil
 	})}
 
 	client := newClientWithEndpoints(httpClient, "client-id", "client-secret", "api-token", "https://github.test", "https://github.test/login/oauth/access_token")
@@ -87,8 +88,8 @@ func TestCheckUsersStarUsesPerUserStarEndpoint(t *testing.T) {
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(requests) != 2 {
-		t.Fatalf("expected 2 star check requests, got %d", len(requests))
+	if len(requests) != 1 {
+		t.Fatalf("expected 1 stargazer request, got %d", len(requests))
 	}
 }
 

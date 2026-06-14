@@ -49,9 +49,10 @@ func main() {
 			"type":        1,
 		},
 		{
-			"name":        "entrants",
-			"description": "Count entrants",
-			"type":        1,
+			"name":                       "entrants",
+			"description":                "Count entrants",
+			"type":                       1,
+			"default_member_permissions": fmt.Sprintf("%d", int64(domain.PermissionManageGuild)),
 		},
 		{
 			"name":        "winner",
@@ -68,6 +69,20 @@ func main() {
 				},
 			},
 			"default_member_permissions": fmt.Sprintf("%d", int64(domain.PermissionManageGuild)),
+		},
+		{
+			"name":                       "reset-giveaway",
+			"description":                "Clear stored entries and remove the giveaway role from known entrants",
+			"type":                       1,
+			"default_member_permissions": fmt.Sprintf("%d", int64(domain.PermissionManageGuild)),
+			"options": []map[string]any{
+				{
+					"type":        3,
+					"name":        "confirm",
+					"description": "Type RESET to confirm",
+					"required":    true,
+				},
+			},
 		},
 	}
 

@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"sync"
 
 	"github.com/producdevity/emuready-discord-giveaway/internal/domain"
 	"github.com/producdevity/emuready-discord-giveaway/internal/httpclient"
@@ -22,6 +21,10 @@ const githubOAuthTokenEndpoint = "https://github.com/login/oauth/access_token"
 
 type currentUser struct {
 	ID    int64  `json:"id"`
+	Login string `json:"login"`
+}
+
+type stargazer struct {
 	Login string `json:"login"`
 }
 
@@ -105,6 +108,29 @@ func (c *Client) doRequest(ctx context.Context, method, endpoint string, payload
 	}, c.logger, c.retryPolicy)
 }
 
+func (c *Client) request(ctx context.Context, method, endpoint string, payload any, accessToken string, out any) error {
+	resp, err := c.doRequest(ctx, method, endpoint, payload, accessToken)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+		return fmt.Errorf("github api error status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	if out == nil {
+		return nil
+	}
+	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+		if err == io.EOF {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 func (c *Client) ExchangeCode(ctx context.Context, code string, redirectURI string) (string, error) {
 	payload := url.Values{
 		"client_id":     []string{c.clientID},
@@ -179,7 +205,7 @@ func (c *Client) HasStarredRepo(ctx context.Context, accessToken string, owner, 
 	return false, fmt.Errorf("github starred check failed: %d %s", resp.StatusCode, strings.TrimSpace(string(body)))
 }
 
-func (c *Client) CheckUsersStar(ctx context.Context, usernames []string, owner string, repo string, concurrency int) (map[string]bool, bool, error) {
+func (c *Client) CheckUsersStar(ctx context.Context, usernames []string, owner string, repo string, _ int) (map[string]bool, bool, error) {
 	result := make(map[string]bool, len(usernames))
 	pending := make(map[string]struct{}, len(usernames))
 	for _, login := range usernames {
@@ -193,69 +219,27 @@ func (c *Client) CheckUsersStar(ctx context.Context, usernames []string, owner s
 	if len(pending) == 0 {
 		return result, true, nil
 	}
-	if concurrency < 1 {
-		concurrency = 1
-	}
-	if concurrency > len(pending) {
-		concurrency = len(pending)
-	}
 
-	jobs := make(chan string)
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	var firstErr error
+	for page := 1; len(pending) > 0; page++ {
+		var stargazers []stargazer
+		endpoint := fmt.Sprintf("%s/repos/%s/%s/stargazers?per_page=100&page=%d", c.apiBaseURL, pathEscape(owner), pathEscape(repo), page)
+		if err := c.request(ctx, http.MethodGet, endpoint, nil, c.apiToken, &stargazers); err != nil {
+			return result, false, err
+		}
 
-	for i := 0; i < concurrency; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			for login := range jobs {
-				starred, err := c.HasUserStarredRepo(ctx, login, owner, repo)
-				mu.Lock()
-				if err != nil && firstErr == nil {
-					firstErr = err
-				}
-				if err == nil {
-					result[login] = starred
-				}
-				mu.Unlock()
+		for _, user := range stargazers {
+			login := strings.ToLower(strings.TrimSpace(user.Login))
+			if _, ok := pending[login]; !ok {
+				continue
 			}
-		}()
-	}
-
-	for login := range pending {
-		select {
-		case <-ctx.Done():
-			close(jobs)
-			wg.Wait()
-			return result, false, ctx.Err()
-		case jobs <- login:
+			result[login] = true
+			delete(pending, login)
+		}
+		if len(stargazers) < 100 {
+			break
 		}
 	}
-	close(jobs)
-	wg.Wait()
-	if firstErr != nil {
-		return result, false, firstErr
-	}
 	return result, true, nil
-}
-
-func (c *Client) HasUserStarredRepo(ctx context.Context, username, owner, repo string) (bool, error) {
-	endpoint := fmt.Sprintf("%s/users/%s/starred/%s/%s", c.apiBaseURL, pathEscape(username), pathEscape(owner), pathEscape(repo))
-	resp, err := c.doRequest(ctx, http.MethodGet, endpoint, nil, c.apiToken)
-	if err != nil {
-		return false, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	switch resp.StatusCode {
-	case http.StatusNoContent:
-		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	}
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
-	return false, fmt.Errorf("github user starred check failed: %d %s", resp.StatusCode, strings.TrimSpace(string(body)))
 }
 
 func pathEscape(value string) string {

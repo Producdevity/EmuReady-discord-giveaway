@@ -82,3 +82,14 @@ func (d *InteractionData) IntOption(name string) (int, bool) {
 	}
 	return 0, false
 }
+
+func (d *InteractionData) StringOption(name string) (string, bool) {
+	for _, option := range d.Options {
+		if option.Name != name {
+			continue
+		}
+		value, ok := option.Value.(string)
+		return value, ok
+	}
+	return "", false
+}

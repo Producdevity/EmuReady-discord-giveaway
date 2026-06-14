@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/producdevity/emuready-discord-giveaway/internal/application"
@@ -28,6 +29,7 @@ type entrantCounter interface {
 type InteractionHandler struct {
 	cfg           *config.Config
 	enterSvc      *application.EnterService
+	resetSvc      *application.ResetService
 	entrants      entrantCounter
 	discordClient interactionDiscordClient
 	winnerQueue   *worker.WinnerQueue
@@ -37,6 +39,7 @@ type InteractionHandler struct {
 func NewInteractionHandler(
 	cfg *config.Config,
 	enterSvc *application.EnterService,
+	resetSvc *application.ResetService,
 	entrants entrantCounter,
 	discordClient interactionDiscordClient,
 	winnerQueue *worker.WinnerQueue,
@@ -45,6 +48,7 @@ func NewInteractionHandler(
 	return &InteractionHandler{
 		cfg:           cfg,
 		enterSvc:      enterSvc,
+		resetSvc:      resetSvc,
 		entrants:      entrants,
 		discordClient: discordClient,
 		winnerQueue:   winnerQueue,
@@ -122,6 +126,9 @@ func (h *InteractionHandler) handleCommand(c *fiber.Ctx, interaction domain.Inte
 		}
 		return c.JSON(resp)
 	case "entrants":
+		if !hasManageGuild(interaction) {
+			return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "You need Manage Server permission to use /entrants.", Flags: domain.MessageFlagEphemeral}})
+		}
 		count, err := h.entrants.CountEntrants(c.Context())
 		if err != nil {
 			h.logger.Error().Err(err).Str("request_id", requestID).Msg("count entrants failed")
@@ -141,8 +148,26 @@ func (h *InteractionHandler) handleCommand(c *fiber.Ctx, interaction domain.Inte
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "winner queue unavailable"})
 		}
 		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseDeferredMessage, Data: &domain.InteractionMessageData{Flags: domain.MessageFlagEphemeral}})
+	case "reset-giveaway":
+		if !hasManageGuild(interaction) {
+			return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "You need Manage Server permission to use /reset-giveaway.", Flags: domain.MessageFlagEphemeral}})
+		}
+		confirm, ok := interaction.Data.StringOption("confirm")
+		if !ok || strings.TrimSpace(confirm) != "RESET" {
+			return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "To reset the giveaway, run /reset-giveaway confirm: RESET", Flags: domain.MessageFlagEphemeral}})
+		}
+		go h.runReset(interaction)
+		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseDeferredMessage, Data: &domain.InteractionMessageData{Flags: domain.MessageFlagEphemeral}})
 	default:
 		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "Unknown command.", Flags: domain.MessageFlagEphemeral}})
+	}
+}
+
+func (h *InteractionHandler) runReset(interaction domain.Interaction) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if err := h.resetSvc.Run(ctx, interaction); err != nil {
+		h.logger.Error().Err(err).Msg("reset giveaway failed")
 	}
 }
 
