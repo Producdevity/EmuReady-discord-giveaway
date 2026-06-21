@@ -89,6 +89,7 @@ func main() {
 		},
 		BodyLimit: cfg.MaxInteractionBodyBytes + 1024,
 	})
+	app.Use(middleware.SecurityHeaders())
 	app.Use(middleware.RequestID())
 	app.Use(middleware.Recover(logger))
 
