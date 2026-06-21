@@ -1,6 +1,6 @@
 # EmuReady Discord Giveaway
 
-Discord bot service for running an EmuReady giveaway tied to GitHub repository stars. Users enter through a Discord slash command, complete GitHub OAuth, and receive a giveaway role after the service verifies that their GitHub account has starred the configured repository.
+Discord bot service for running an EmuReady giveaway tied to GitHub repository stars. Users enter through a Discord slash command, complete GitHub OAuth, and receive the persistent Giveaway Pings role after the service verifies that their GitHub account has starred the configured repository.
 
 The service is written in Go, uses PostgreSQL for entrant storage, and ships with Docker Compose for local development and single-server deployment.
 

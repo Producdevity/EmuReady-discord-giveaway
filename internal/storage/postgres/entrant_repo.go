@@ -23,7 +23,7 @@ func NewEntrantRepository(pool *pgxpool.Pool) storage.EntrantRepository {
 func (r *EntrantRepository) FindEntrant(ctx context.Context, discordID int64) (*domain.Entrant, error) {
 	row := r.pool.QueryRow(ctx, `
 	SELECT discord_id, github_id, github_login, created_at
-	FROM entries WHERE discord_id = $1`, discordID)
+	FROM entries WHERE discord_id = $1 AND deleted_at IS NULL`, discordID)
 
 	var entrant domain.Entrant
 	if err := row.Scan(&entrant.DiscordID, &entrant.GithubID, &entrant.GithubLogin, &entrant.CreatedAt); err != nil {
@@ -40,7 +40,7 @@ func (r *EntrantRepository) UpsertEntrant(ctx context.Context, entrant domain.En
 	err := r.pool.QueryRow(ctx, `
 		SELECT discord_id
 		FROM entries
-		WHERE github_id = $1 AND discord_id <> $2`, entrant.GithubID, entrant.DiscordID).Scan(&linkedDiscordID)
+		WHERE github_id = $1 AND discord_id <> $2 AND deleted_at IS NULL`, entrant.GithubID, entrant.DiscordID).Scan(&linkedDiscordID)
 	if err == nil {
 		return domain.ErrGitHubAlreadyLinked
 	}
@@ -49,9 +49,9 @@ func (r *EntrantRepository) UpsertEntrant(ctx context.Context, entrant domain.En
 	}
 
 	_, err = r.pool.Exec(ctx, `
-		INSERT INTO entries (discord_id, github_id, github_login)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (discord_id)
+		INSERT INTO entries (discord_id, github_id, github_login, deleted_at)
+		VALUES ($1, $2, $3, NULL)
+		ON CONFLICT (discord_id) WHERE deleted_at IS NULL
 		DO UPDATE SET github_id = EXCLUDED.github_id, github_login = EXCLUDED.github_login`, entrant.DiscordID, entrant.GithubID, entrant.GithubLogin)
 	if isUniqueViolation(err) {
 		return domain.ErrGitHubAlreadyLinked
@@ -62,20 +62,30 @@ func (r *EntrantRepository) UpsertEntrant(ctx context.Context, entrant domain.En
 func (r *EntrantRepository) DeleteEntrant(ctx context.Context, discordID int64, githubID int64) error {
 	_, err := r.pool.Exec(ctx, `
 		DELETE FROM entries
-		WHERE discord_id = $1 AND github_id = $2`, discordID, githubID)
+		WHERE discord_id = $1 AND github_id = $2 AND deleted_at IS NULL`, discordID, githubID)
+	return err
+}
+
+func (r *EntrantRepository) SoftDeleteEntrant(ctx context.Context, discordID int64, githubID int64) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE entries
+		SET deleted_at = NOW()
+		WHERE discord_id = $1 AND github_id = $2 AND deleted_at IS NULL`, discordID, githubID)
 	return err
 }
 
 func (r *EntrantRepository) CountEntrants(ctx context.Context) (int, error) {
 	var count int
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM entries`).Scan(&count)
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM entries WHERE deleted_at IS NULL`).Scan(&count)
 	return count, err
 }
 
 func (r *EntrantRepository) AllEntrants(ctx context.Context) ([]domain.Entrant, error) {
 	rows, err := r.pool.Query(ctx, `
 	SELECT discord_id, github_id, github_login, created_at
-	FROM entries ORDER BY created_at ASC`)
+	FROM entries
+	WHERE deleted_at IS NULL
+	ORDER BY created_at ASC`)
 	if err != nil {
 		return nil, err
 	}

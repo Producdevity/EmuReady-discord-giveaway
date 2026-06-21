@@ -15,7 +15,6 @@ import (
 )
 
 type winnerDiscordClient interface {
-	RemoveRoleFromMember(ctx context.Context, guildID, userID, roleID string) error
 	EditOriginalInteractionResponse(ctx context.Context, applicationID string, interactionToken string, body interface{}) error
 }
 
@@ -91,23 +90,21 @@ func (s *WinnerService) Run(ctx context.Context, interaction domain.Interaction,
 	}
 
 	kept := make([]domain.Entrant, 0)
-	removed := 0
+	archived := 0
 	for _, entrant := range candidates {
 		if starred[strings.ToLower(strings.TrimSpace(entrant.GithubLogin))] {
 			kept = append(kept, entrant)
 			continue
 		}
-		if err := s.discord.RemoveRoleFromMember(ctx, s.cfg.GuildID, fmt.Sprintf("%d", entrant.DiscordID), s.cfg.GiveawayRoleID); err != nil {
-			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("remove role failed")
+		if err := s.repo.SoftDeleteEntrant(ctx, entrant.DiscordID, entrant.GithubID); err != nil {
+			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("archive stale entrant failed")
+			continue
 		}
-		if err := s.repo.DeleteEntrant(ctx, entrant.DiscordID, entrant.GithubID); err != nil {
-			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("delete stale entrant failed")
-		}
-		removed++
+		archived++
 	}
 
 	if len(kept) == 0 {
-		msg := fmt.Sprintf("No eligible entrants. Removed %d non-starrer(s)", removed)
+		msg := fmt.Sprintf("No eligible entrants. Archived %d no-longer-starred entrant(s).", archived)
 		return s.respond(ctx, interaction.Token, msg)
 	}
 
@@ -122,9 +119,9 @@ func (s *WinnerService) Run(ctx context.Context, interaction domain.Interaction,
 	for i, winner := range kept {
 		lines = append(lines, fmt.Sprintf("%d. <@%d> (%s)", i+1, winner.DiscordID, winner.GithubLogin))
 	}
-	if removed > 0 {
+	if archived > 0 {
 		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("Removed %d entrant(s) who are no longer starred.", removed))
+		lines = append(lines, fmt.Sprintf("Archived %d no-longer-starred entrant(s).", archived))
 	}
 	return s.respond(ctx, interaction.Token, strings.Join(lines, "\n"))
 }

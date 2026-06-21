@@ -103,11 +103,6 @@ func (c *Client) AddRoleToMember(ctx context.Context, guildID, userID, roleID st
 	return c.request(ctx, http.MethodPut, url, map[string]interface{}{}, nil)
 }
 
-func (c *Client) RemoveRoleFromMember(ctx context.Context, guildID, userID, roleID string) error {
-	url := fmt.Sprintf("%s/guilds/%s/members/%s/roles/%s", discordAPIPrefix, guildID, userID, roleID)
-	return c.request(ctx, http.MethodDelete, url, nil, nil)
-}
-
 func (c *Client) EditOriginalInteractionResponse(ctx context.Context, applicationID string, interactionToken string, body interface{}) error {
 	url := fmt.Sprintf("%s/webhooks/%s/%s/messages/@original", discordAPIPrefix, applicationID, interactionToken)
 	return c.request(ctx, http.MethodPatch, url, body, nil)

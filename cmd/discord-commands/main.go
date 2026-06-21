@@ -72,7 +72,7 @@ func main() {
 		},
 		{
 			"name":                       "reset-giveaway",
-			"description":                "Clear stored entries and remove the giveaway role from known entrants",
+			"description":                "Archive current giveaway entries",
 			"type":                       1,
 			"default_member_permissions": fmt.Sprintf("%d", int64(domain.PermissionManageGuild)),
 			"options": []map[string]any{

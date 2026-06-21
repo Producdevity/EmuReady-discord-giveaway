@@ -12,7 +12,6 @@ import (
 )
 
 type resetDiscordClient interface {
-	RemoveRoleFromMember(ctx context.Context, guildID, userID, roleID string) error
 	EditOriginalInteractionResponse(ctx context.Context, applicationID string, interactionToken string, body interface{}) error
 }
 
@@ -41,34 +40,24 @@ func (s *ResetService) Run(ctx context.Context, interaction domain.Interaction) 
 		return s.respond(ctx, interaction.Token, "No giveaway entries to reset.")
 	}
 
-	rolesRemoved := 0
-	roleFailures := 0
-	entriesDeleted := 0
-	deleteFailures := 0
+	entriesArchived := 0
+	archiveFailures := 0
 	for _, entrant := range entrants {
-		discordID := fmt.Sprintf("%d", entrant.DiscordID)
-		if err := s.discord.RemoveRoleFromMember(ctx, s.cfg.GuildID, discordID, s.cfg.GiveawayRoleID); err != nil {
-			roleFailures++
-			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("reset role removal failed")
-		} else {
-			rolesRemoved++
-		}
-
-		if err := s.repo.DeleteEntrant(ctx, entrant.DiscordID, entrant.GithubID); err != nil {
-			deleteFailures++
-			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("reset entrant delete failed")
+		if err := s.repo.SoftDeleteEntrant(ctx, entrant.DiscordID, entrant.GithubID); err != nil {
+			archiveFailures++
+			s.logger.Warn().Err(err).Int64("discord_id", entrant.DiscordID).Msg("reset entrant archive failed")
 			continue
 		}
-		entriesDeleted++
+		entriesArchived++
 	}
 
 	entryLabel := "entries"
-	if entriesDeleted == 1 {
+	if entriesArchived == 1 {
 		entryLabel = "entry"
 	}
-	content := fmt.Sprintf("Giveaway reset complete. Deleted %d stored %s. Removed the giveaway role from %d user(s).", entriesDeleted, entryLabel, rolesRemoved)
-	if roleFailures > 0 || deleteFailures > 0 {
-		content += fmt.Sprintf(" Role removal failed for %d user(s); entry deletion failed for %d user(s).", roleFailures, deleteFailures)
+	content := fmt.Sprintf("Giveaway reset complete. Archived %d stored %s. Giveaway ping roles were left unchanged.", entriesArchived, entryLabel)
+	if archiveFailures > 0 {
+		content += fmt.Sprintf(" Entry archive failed for %d user(s).", archiveFailures)
 	}
 	return s.respond(ctx, interaction.Token, content)
 }

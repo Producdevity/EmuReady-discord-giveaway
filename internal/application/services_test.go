@@ -68,11 +68,8 @@ func TestWinnerEditsOriginalInteractionWithWebhookPayload(t *testing.T) {
 		t.Fatalf("run winner service: %v", err)
 	}
 
-	if len(discord.removedUsers) != 1 || discord.removedUsers[0] != "2" {
-		t.Fatalf("expected bob role removal, got %v", discord.removedUsers)
-	}
-	if len(store.deletes) != 1 || store.deletes[0].DiscordID != 2 || store.deletes[0].GithubID != 22 {
-		t.Fatalf("expected bob entry deletion, got %v", store.deletes)
+	if len(store.softDeletes) != 1 || store.softDeletes[0].DiscordID != 2 || store.softDeletes[0].GithubID != 22 {
+		t.Fatalf("expected bob entry archive, got %v", store.softDeletes)
 	}
 	if len(discord.edits) != 1 {
 		t.Fatalf("expected one edit, got %d", len(discord.edits))
@@ -89,7 +86,38 @@ func TestWinnerEditsOriginalInteractionWithWebhookPayload(t *testing.T) {
 	}
 }
 
-func TestResetServiceRemovesRolesAndDeletesEntrants(t *testing.T) {
+func TestWinnerDoesNotCountFailedArchiveAsArchived(t *testing.T) {
+	store := &fakeEntrantStore{
+		entrants:      []domain.Entrant{{DiscordID: 2, GithubID: 22, GithubLogin: "bob"}},
+		softDeleteErr: errors.New("archive failed"),
+	}
+	discord := &fakeWinnerDiscord{}
+	github := &fakeWinnerGitHub{starred: map[string]bool{"bob": false}}
+
+	service, err := NewWinnerService(testConfig(), store, discord, github, zerolog.Nop())
+	if err != nil {
+		t.Fatalf("new winner service: %v", err)
+	}
+	if err := service.Run(context.Background(), domain.Interaction{Token: "interaction-token"}, 1); err != nil {
+		t.Fatalf("run winner service: %v", err)
+	}
+
+	if len(store.softDeletes) != 1 {
+		t.Fatalf("expected one archive attempt, got %v", store.softDeletes)
+	}
+	if len(discord.edits) != 1 {
+		t.Fatalf("expected one edit, got %d", len(discord.edits))
+	}
+	payload, ok := discord.edits[0].(domain.WebhookMessageEdit)
+	if !ok {
+		t.Fatalf("expected webhook message edit payload, got %T", discord.edits[0])
+	}
+	if !strings.Contains(payload.Content, "Archived 0 no-longer-starred entrant(s).") {
+		t.Fatalf("winner content should not count failed archive: %q", payload.Content)
+	}
+}
+
+func TestResetServiceArchivesEntrantsWithoutRemovingRoles(t *testing.T) {
 	store := &fakeEntrantStore{
 		entrants: []domain.Entrant{
 			{DiscordID: 1, GithubID: 11, GithubLogin: "alice"},
@@ -103,11 +131,8 @@ func TestResetServiceRemovesRolesAndDeletesEntrants(t *testing.T) {
 		t.Fatalf("run reset service: %v", err)
 	}
 
-	if len(discord.removedUsers) != 2 {
-		t.Fatalf("expected two role removals, got %v", discord.removedUsers)
-	}
-	if len(store.deletes) != 2 {
-		t.Fatalf("expected two deleted entries, got %v", store.deletes)
+	if len(store.softDeletes) != 2 {
+		t.Fatalf("expected two archived entries, got %v", store.softDeletes)
 	}
 	if len(discord.edits) != 1 {
 		t.Fatalf("expected one edit, got %d", len(discord.edits))
@@ -118,6 +143,12 @@ func TestResetServiceRemovesRolesAndDeletesEntrants(t *testing.T) {
 	}
 	if !strings.Contains(payload.Content, "Giveaway reset complete") {
 		t.Fatalf("reset content mismatch: %q", payload.Content)
+	}
+	if !strings.Contains(payload.Content, "Archived 2 stored entries") {
+		t.Fatalf("reset content missing archive count: %q", payload.Content)
+	}
+	if !strings.Contains(payload.Content, "Giveaway ping roles were left unchanged") {
+		t.Fatalf("reset content should state roles are unchanged: %q", payload.Content)
 	}
 }
 
@@ -135,9 +166,12 @@ func testConfig() *config.Config {
 }
 
 type fakeEntrantStore struct {
-	entrants []domain.Entrant
-	upserts  []domain.Entrant
-	deletes  []domain.Entrant
+	entrants    []domain.Entrant
+	upserts     []domain.Entrant
+	deletes     []domain.Entrant
+	softDeletes []domain.Entrant
+
+	softDeleteErr error
 }
 
 func (s *fakeEntrantStore) FindEntrant(context.Context, int64) (*domain.Entrant, error) {
@@ -152,6 +186,11 @@ func (s *fakeEntrantStore) UpsertEntrant(_ context.Context, entrant domain.Entra
 func (s *fakeEntrantStore) DeleteEntrant(_ context.Context, discordID int64, githubID int64) error {
 	s.deletes = append(s.deletes, domain.Entrant{DiscordID: discordID, GithubID: githubID})
 	return nil
+}
+
+func (s *fakeEntrantStore) SoftDeleteEntrant(_ context.Context, discordID int64, githubID int64) error {
+	s.softDeletes = append(s.softDeletes, domain.Entrant{DiscordID: discordID, GithubID: githubID})
+	return s.softDeleteErr
 }
 
 func (s *fakeEntrantStore) CountEntrants(context.Context) (int, error) {
@@ -188,13 +227,7 @@ func (g *fakeCallbackGitHub) HasStarredRepo(context.Context, string, string, str
 }
 
 type fakeWinnerDiscord struct {
-	removedUsers []string
-	edits        []interface{}
-}
-
-func (d *fakeWinnerDiscord) RemoveRoleFromMember(_ context.Context, _ string, userID string, _ string) error {
-	d.removedUsers = append(d.removedUsers, userID)
-	return nil
+	edits []interface{}
 }
 
 func (d *fakeWinnerDiscord) EditOriginalInteractionResponse(_ context.Context, _ string, _ string, body interface{}) error {

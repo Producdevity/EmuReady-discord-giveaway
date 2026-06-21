@@ -149,7 +149,7 @@ const privacyPolicyHTML = `<!doctype html>
       <h3>2.1 Information from Discord</h3>
       <ul>
         <li><strong>Discord user ID:</strong> Used to identify the Discord account entering the giveaway.</li>
-        <li><strong>Discord server and role data:</strong> Used to assign or remove the configured giveaway role for known entrants.</li>
+        <li><strong>Discord server and role data:</strong> Used to assign the configured giveaway ping role for known entrants.</li>
         <li><strong>Slash command interaction data:</strong> Used only to respond to giveaway commands such as <code>/enter-giveaway</code>, <code>/entrants</code>, and <code>/winner</code>.</li>
       </ul>
 
@@ -177,7 +177,7 @@ const privacyPolicyHTML = `<!doctype html>
       <ul>
         <li>Verify giveaway eligibility through GitHub star status.</li>
         <li>Prevent the same GitHub account from entering through multiple Discord accounts.</li>
-        <li>Assign and remove the configured giveaway role in Discord.</li>
+        <li>Assign the configured giveaway ping role in Discord.</li>
         <li>Count giveaway entrants and draw winners from stored giveaway entries.</li>
         <li>Re-check eligibility before a winner is selected.</li>
         <li>Operate, secure, debug, and improve the giveaway service.</li>
@@ -191,7 +191,7 @@ const privacyPolicyHTML = `<!doctype html>
         when needed to operate the giveaway:
       </p>
       <ul>
-        <li><strong>Discord:</strong> The bot uses Discord APIs to receive commands and manage the giveaway role.</li>
+        <li><strong>Discord:</strong> The bot uses Discord APIs to receive commands and assign the giveaway ping role.</li>
         <li><strong>GitHub:</strong> The bot uses GitHub OAuth and GitHub APIs to verify star status.</li>
         <li><strong>Railway:</strong> The service and database are hosted on Railway infrastructure.</li>
         <li><strong>Public Discord output:</strong> Winner results or staff command responses may be visible in the Discord channel where staff run the command.</li>
@@ -202,9 +202,11 @@ const privacyPolicyHTML = `<!doctype html>
     <section>
       <h2>5. Data Retention</h2>
       <p>
-        Giveaway entries are stored while they are needed to run the giveaway, prevent duplicate
-        entries, audit winner selection, and handle support requests. Entries may remain after a
-        giveaway ends until staff clean up the giveaway data or a deletion request is processed.
+        Active giveaway entries are stored while they are needed to run the giveaway, prevent
+        duplicate entries, audit winner selection, and handle support requests. When staff reset a
+        giveaway, entries are archived with a deletion timestamp and excluded from future entrant
+        counts and winner draws. Archived entries may remain until a deletion request is processed
+        or staff permanently clean up historical giveaway data.
       </p>
       <p>
         OAuth state data is short-lived and expires automatically. Operational logs are retained
@@ -232,9 +234,9 @@ const privacyPolicyHTML = `<!doctype html>
         staff in the EmuReady Discord server to remove your giveaway entry and related stored data.
       </p>
       <p>
-        You can also remove the giveaway role from your Discord account if your server permissions
-        allow it, unstar the GitHub repository, revoke GitHub OAuth access in your GitHub account
-        settings, or remove the bot from a server if you administer that server.
+        You can also manage giveaway ping notifications through the Discord server&apos;s role
+        settings where available, unstar the GitHub repository, revoke GitHub OAuth access in your
+        GitHub account settings, or remove the bot from a server if you administer that server.
       </p>
     </section>
 

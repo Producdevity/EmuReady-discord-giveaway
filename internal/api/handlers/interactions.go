@@ -147,7 +147,7 @@ func (h *InteractionHandler) handleCommand(c *fiber.Ctx, interaction domain.Inte
 			h.logger.Error().Err(err).Str("request_id", requestID).Msg("winner queue unavailable")
 			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{"error": "winner queue unavailable"})
 		}
-		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseDeferredMessage, Data: &domain.InteractionMessageData{Flags: domain.MessageFlagEphemeral}})
+		return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseDeferredMessage})
 	case "reset-giveaway":
 		if !hasManageGuild(interaction) {
 			return c.JSON(domain.InteractionResponse{Type: domain.InteractionResponseChannelMessage, Data: &domain.InteractionMessageData{Content: "You need Manage Server permission to use /reset-giveaway.", Flags: domain.MessageFlagEphemeral}})

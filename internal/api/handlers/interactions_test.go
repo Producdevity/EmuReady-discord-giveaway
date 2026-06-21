@@ -9,6 +9,7 @@ import (
 
 	"github.com/producdevity/emuready-discord-giveaway/internal/config"
 	"github.com/producdevity/emuready-discord-giveaway/internal/domain"
+	"github.com/producdevity/emuready-discord-giveaway/internal/worker"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/rs/zerolog"
@@ -103,6 +104,57 @@ func TestEntrantsCommandRequiresManageServer(t *testing.T) {
 	}
 	if response.Data.Flags != domain.MessageFlagEphemeral {
 		t.Fatalf("flags = %d, want ephemeral flag", response.Data.Flags)
+	}
+}
+
+func TestWinnerCommandDefersPublicly(t *testing.T) {
+	winnerQueue := worker.NewWinnerQueue(context.Background(), 1, func(context.Context, worker.WinnerTask) error {
+		return nil
+	}, zerolog.Nop())
+	defer winnerQueue.Close()
+
+	handler := NewInteractionHandler(
+		&config.Config{WinnerDefaultCount: 1, WinnerMax: 10},
+		nil,
+		nil,
+		&fakeEntrantCounter{count: 7},
+		&fakeInteractionDiscord{},
+		winnerQueue,
+		zerolog.Nop(),
+	)
+
+	app := fiber.New()
+	app.Get("/test", func(c *fiber.Ctx) error {
+		return handler.handleCommand(c, domain.Interaction{
+			Data:    &domain.InteractionData{Name: "winner"},
+			GuildID: "guild-id",
+			Token:   "interaction-token",
+			Member:  &domain.InteractionMember{User: &domain.DiscordUser{ID: "42"}, Permissions: "32"},
+		})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	res, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("winner request failed: %v", err)
+	}
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("status code = %d, want %d", res.StatusCode, http.StatusOK)
+	}
+
+	var response domain.InteractionResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if response.Type != domain.InteractionResponseDeferredMessage {
+		t.Fatalf("response type = %d, want deferred message", response.Type)
+	}
+	if response.Data != nil && response.Data.Flags&domain.MessageFlagEphemeral != 0 {
+		t.Fatalf("winner response should be public, got flags %d", response.Data.Flags)
 	}
 }
 
